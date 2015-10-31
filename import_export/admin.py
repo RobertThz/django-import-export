@@ -16,8 +16,6 @@ from django.http import HttpResponseRedirect, HttpResponse
 from django.core.urlresolvers import reverse
 from django.conf import settings
 
-import pdb
-
 from .forms import (
     ImportForm,
     ConfirmImportForm,
@@ -148,7 +146,11 @@ class ImportMixin(ImportExportMixinBase):
             input_format = import_formats[
                 int(confirm_form.cleaned_data['input_format'])
             ]()
-            tmp_storage = self.get_tmp_storage_class()(name=confirm_form.cleaned_data['import_file_name'])
+            file_encoding = (self.from_encoding  if self.from_encoding
+                             else None)
+            tmp_storage = self.get_tmp_storage_class()(
+                   name=confirm_form.cleaned_data['import_file_name'],
+                   encoding=file_encoding)
             data = tmp_storage.read(input_format.get_read_mode())
             if not input_format.is_binary() and self.from_encoding:
                 data = force_text(data, self.from_encoding)
@@ -209,15 +211,14 @@ class ImportMixin(ImportExportMixinBase):
             import_file = form.cleaned_data['import_file']
             # first always write the uploaded file to disk as it may be a
             # memory file or else based on settings upload handlers
-            wanted_encoding = (self.from_encoding ? self.from_encoding :
-                               None)
+            file_encoding = (self.from_encoding  if self.from_encoding
+                             else None)
             tmp_storage = self.get_tmp_storage_class()(
-                                encoding=wanted_encoding)
+                                encoding=file_encoding)
             data = bytes()
             for chunk in import_file.chunks():
                 data += chunk
 
-            #pdb.set_trace()
             tmp_storage.save(data, input_format.get_read_mode())
 
             # then read the file, using the proper format-specific mode
@@ -347,11 +348,23 @@ class ExportMixin(ImportExportMixinBase):
             queryset = self.get_export_queryset(request)
             export_data = self.get_export_data(file_format, queryset)
             content_type = file_format.get_content_type()
+            if not file_format.is_binary() and self.to_encoding:
+                content_type += '; charset='+self.to_encoding
             # Django 1.7 uses the content_type kwarg instead of mimetype
             try:
-                response = HttpResponse(export_data, content_type=content_type)
+                response = HttpResponse(content_type=content_type)
             except TypeError:
-                response = HttpResponse(export_data, mimetype=content_type)
+                response = HttpResponse(mimetype=content_type)
+            # Django 1.7 has no proper way of setting the encoding
+            # apart from messing with DEFAULT_CHARSET, let's
+            # hold our noses and cheat. Vers 1.8 and up should
+            # respect the "charset" we added to content_type
+            if (django.VERSION < (1,8.0) and not file_format.is_binary() and
+                  self.to_encoding):
+                response._charset=self.to_encoding
+            # We have to add our content _after_ setting charset,
+            # otherwise it's too late.
+            response.content=export_data
             response['Content-Disposition'] = 'attachment; filename=%s' % (
                 self.get_export_filename(file_format),
             )

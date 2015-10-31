@@ -33,6 +33,7 @@ class TempFolderStorage(BaseStorage):
                 return open(self.get_full_path(), mode,
                             encoding=self.encoding)
             except (TypeError) as e:
+                # No "encoding=" for python2
                 return open(self.get_full_path(), mode)
         else:
             tmp_file = tempfile.NamedTemporaryFile(delete=False)
