@@ -11,8 +11,9 @@ from django.core.files.base import ContentFile
 
 class BaseStorage(object):
 
-    def __init__(self, name=None):
+    def __init__(self, name=None, encoding=None):
         self.name = name
+        self.encoding = encoding
 
     def save(self, data, mode='w'):
         raise NotImplementedError
@@ -28,7 +29,11 @@ class TempFolderStorage(BaseStorage):
 
     def open(self, mode='r'):
         if self.name:
-            return open(self.get_full_path(), mode)
+            try:
+                return open(self.get_full_path(), mode,
+                            encoding=self.encoding)
+            except (TypeError) as e:
+                return open(self.get_full_path(), mode)
         else:
             tmp_file = tempfile.NamedTemporaryFile(delete=False)
             self.name = tmp_file.name

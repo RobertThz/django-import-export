@@ -16,6 +16,8 @@ from django.http import HttpResponseRedirect, HttpResponse
 from django.core.urlresolvers import reverse
 from django.conf import settings
 
+import pdb
+
 from .forms import (
     ImportForm,
     ConfirmImportForm,
@@ -207,11 +209,15 @@ class ImportMixin(ImportExportMixinBase):
             import_file = form.cleaned_data['import_file']
             # first always write the uploaded file to disk as it may be a
             # memory file or else based on settings upload handlers
-            tmp_storage = self.get_tmp_storage_class()()
+            wanted_encoding = (self.from_encoding ? self.from_encoding :
+                               None)
+            tmp_storage = self.get_tmp_storage_class()(
+                                encoding=wanted_encoding)
             data = bytes()
             for chunk in import_file.chunks():
                 data += chunk
 
+            #pdb.set_trace()
             tmp_storage.save(data, input_format.get_read_mode())
 
             # then read the file, using the proper format-specific mode
